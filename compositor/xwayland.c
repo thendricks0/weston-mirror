@@ -30,6 +30,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/socket.h>
+#include <assert.h>
 
 #include <libweston/libweston.h>
 #include "compositor/weston.h"
@@ -68,6 +69,7 @@ spawn_xserver(void *user_data, const char *display, int abstract_fd, int unix_fd
 	char s[12], abstract_fd_str[12], unix_fd_str[12], wm_fd_str[12];
 	int sv[2], wm[2], fd;
 	char *xserver = NULL;
+	bool disable_ac = false;
 	struct weston_config *config = wet_get_config(wxw->compositor);
 	struct weston_config_section *section;
 
@@ -92,10 +94,13 @@ spawn_xserver(void *user_data, const char *display, int abstract_fd, int unix_fd
 		snprintf(s, sizeof s, "%d", fd);
 		setenv("WAYLAND_SOCKET", s, 1);
 
-		fd = dup(abstract_fd);
-		if (fd < 0)
-			goto fail;
-		snprintf(abstract_fd_str, sizeof abstract_fd_str, "%d", fd);
+		if (abstract_fd) {
+			fd = dup(abstract_fd);
+			if (fd < 0)
+				goto fail;
+			snprintf(abstract_fd_str, sizeof abstract_fd_str, "%d", fd);
+		}
+
 		fd = dup(unix_fd);
 		if (fd < 0)
 			goto fail;
@@ -110,6 +115,9 @@ spawn_xserver(void *user_data, const char *display, int abstract_fd, int unix_fd
 		weston_config_section_get_string(section, "path",
 						 &xserver, XSERVER_PATH);
 
+		weston_config_section_get_bool(section, "disable_access_control",
+						&disable_ac, false);
+
 		/* Ignore SIGUSR1 in the child, which will make the X
 		 * server send SIGUSR1 to the parent (weston) when
 		 * it's done with initialization.  During
@@ -119,30 +127,62 @@ spawn_xserver(void *user_data, const char *display, int abstract_fd, int unix_fd
 		 * it's done with that. */
 		signal(SIGUSR1, SIG_IGN);
 
-		if (execl(xserver,
-			  xserver,
-			  display,
-			  "-rootless",
+		/*
+		 * WSLg: build argv dynamically while keeping
+		 * upstream Weston 10.0 argument ordering for easier future merges.
+		 * Differences from upstream:
+		 *  - Optional -core (configurable) for crash diagnostics.
+		 *  - Conditional listeners: when abstract_fd missing, suppress
+		 *    implicit local listeners via -nolisten local.
+		 *  - Optional -ac via config (disable_access_control).
+		 */
+		bool enable_core_dump = true;
+		weston_config_section_get_bool(section, "enable_core_dump",
+					       &enable_core_dump, true);
+
+		const char *argv[16];
+		int argc = 0;
+		argv[argc++] = xserver;
+		argv[argc++] = display;
+		argv[argc++] = "-rootless";
+		if (enable_core_dump)
+			argv[argc++] = "-core";
+
 #ifdef HAVE_XWAYLAND_LISTENFD
-			  "-listenfd", abstract_fd_str,
-			  "-listenfd", unix_fd_str,
+		if (abstract_fd) {
+			argv[argc++] = "-listenfd";
+			argv[argc++] = abstract_fd_str;
+		} else {
+			argv[argc++] = "-nolisten";
+			argv[argc++] = "local";
+		}
+		argv[argc++] = "-listenfd";
+		argv[argc++] = unix_fd_str;
 #else
-			  "-listen", abstract_fd_str,
-			  "-listen", unix_fd_str,
+		if (abstract_fd) {
+			argv[argc++] = "-listen";
+			argv[argc++] = abstract_fd_str;
+		} else {
+			argv[argc++] = "-nolisten";
+			argv[argc++] = "local";
+		}
+		argv[argc++] = "-listen";
+		argv[argc++] = unix_fd_str;
 #endif
-			  "-wm", wm_fd_str,
-			  "-terminate",
-			  NULL) < 0)
-			weston_log("exec of '%s %s -rootless "
-#ifdef HAVE_XWAYLAND_LISTENFD
-				   "-listenfd %s -listenfd %s "
-#else
-				   "-listen %s -listen %s "
-#endif
-				   "-wm %s -terminate' failed: %s\n",
-				   xserver, display,
-				   abstract_fd_str, unix_fd_str, wm_fd_str,
-				   strerror(errno));
+
+		argv[argc++] = "-wm";
+		argv[argc++] = wm_fd_str;
+		argv[argc++] = "-terminate";
+		if (disable_ac)
+			argv[argc++] = "-ac";
+		argv[argc] = NULL;
+
+		if (execv(xserver, (char * const *)argv) < 0) {
+			weston_log("Failed to exec Xwayland (%s): ", xserver);
+			for (int i = 0; i < argc; i++)
+				weston_log_continue("%s ", argv[i]);
+			weston_log("-> %s\n", strerror(errno));
+		}
 	fail:
 		_exit(EXIT_FAILURE);
 

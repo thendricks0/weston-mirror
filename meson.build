@@ -121,7 +121,7 @@ config_h.set10('TEST_GL_RENDERER', get_option('test-gl-renderer'))
 
 backend_default = get_option('backend-default')
 if backend_default == 'auto'
-	foreach b : [ 'headless', 'x11', 'wayland', 'drm' ]
+	foreach b : [ 'headless', 'x11', 'wayland', 'drm', 'rdp' ]
 		if get_option('backend-' + b)
 			backend_default = b
 		endif
@@ -177,6 +177,7 @@ subdir('desktop-shell')
 subdir('fullscreen-shell')
 subdir('ivi-shell')
 subdir('kiosk-shell')
+subdir('rdprail-shell')
 subdir('remoting')
 subdir('pipewire')
 subdir('clients')
