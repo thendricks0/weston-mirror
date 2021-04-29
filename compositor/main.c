@@ -3300,11 +3300,13 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	char *log_scopes_env = NULL;
 	char *flight_rec_scopes = NULL;
 	char *server_socket = NULL;
+	char *idle_time_env = NULL;
 	int32_t idle_time = -1;
 	int32_t help = 0;
 	char *socket_name = NULL;
 	int32_t version = 0;
 	int32_t noconfig = 0;
+	char *debug_protocol_env = NULL;
 	int32_t debug_protocol = 0;
 	bool numlock_on;
 	char *config_file = NULL;
@@ -3482,6 +3484,10 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	protologger = wl_display_add_protocol_logger(display,
 						     protocol_log_fn,
 						     NULL);
+
+	debug_protocol_env = getenv("WESTON_DEBUG_PROTOCOL");
+	if (debug_protocol_env && (strcmp(debug_protocol_env, "true") == 0))
+		debug_protocol = 1;
 	if (debug_protocol)
 		weston_compositor_enable_debug_protocol(wet.compositor);
 
@@ -3511,6 +3517,9 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	if (wet.init_failed)
 		goto out;
 
+	idle_time_env = getenv("WESTON_IDLE_TIME");
+	if (!idle_time_env || !safe_strtoint(idle_time_env, &idle_time))
+		idle_time = -1;
 	if (idle_time < 0)
 		weston_config_section_get_int(section, "idle-time", &idle_time, -1);
 	if (idle_time < 0)
