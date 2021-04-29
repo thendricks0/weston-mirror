@@ -3048,6 +3048,9 @@ output_repaint_timer_arm(struct weston_compositor *compositor)
 
 		msec_to_this = timespec_sub_to_msec(&output->next_repaint,
 						    &now);
+		TL_POINT(compositor, "core_repaint_timer_arm_output", TLP_OUTPUT(output),
+			 TLP_MSEC(&msec_to_this),
+ 			 TLP_END);
 		if (!any_should_repaint || msec_to_this < msec_to_next)
 			msec_to_next = msec_to_this;
 
@@ -3065,6 +3068,9 @@ output_repaint_timer_arm(struct weston_compositor *compositor)
 	 */
 	if (msec_to_next < 1)
 		msec_to_next = 1;
+
+	TL_POINT(compositor, "core_repaint_timer_arm",
+		TLP_MSEC(&msec_to_next), TLP_END);
 
 	wl_event_source_timer_update(compositor->repaint_timer, msec_to_next);
 }
@@ -3160,6 +3166,7 @@ weston_output_finish_frame(struct weston_output *output,
 	int32_t refresh_nsec;
 	struct timespec now;
 	struct timespec vblank_monotonic;
+	struct timespec next_present_monotonic;
 	int64_t msec_rel;
 
 	assert(output->repaint_status == REPAINT_AWAITING_COMPLETION);
@@ -3226,7 +3233,16 @@ weston_output_finish_frame(struct weston_output *output,
 		}
 	}
 
+	weston_compositor_read_presentation_clock(compositor, &now);
 out:
+	next_present_monotonic = convert_presentation_time_now(compositor,
+							 &output->next_repaint, &now,
+							 CLOCK_MONOTONIC);
+	TL_POINT(compositor, "core_repaint_finished_next_repaint", TLP_OUTPUT(output),
+		 TLP_MSEC(&msec_rel),
+		 TLP_NEXT_PRESENT(&next_present_monotonic),
+		 TLP_END);
+
 	output->repaint_status = REPAINT_SCHEDULED;
 	output_repaint_timer_arm(compositor);
 }
@@ -3249,6 +3265,7 @@ idle_repaint(void *data)
 	assert(output->repaint_status == REPAINT_BEGIN_FROM_IDLE);
 	output->repaint_status = REPAINT_AWAITING_COMPLETION;
 	output->idle_repaint_source = NULL;
+	TL_POINT(output->compositor, "core_repaint_start_loop", TLP_OUTPUT(output), TLP_END);
 	ret = output->start_repaint_loop(output);
 	if (ret != 0)
 		weston_output_schedule_repaint_reset(output);
