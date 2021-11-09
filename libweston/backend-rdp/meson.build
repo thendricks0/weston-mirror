@@ -6,35 +6,31 @@ config_h.set('BUILD_RDP_COMPOSITOR', '1')
 
 dep_frdp = dependency('freerdp3', version: '>= 3.0.0', required: false)
 if not dep_frdp.found()
-	dep_frdp = dependency('freerdp2', version: '>= 2.0.0', required: false)
+	dep_frdp = dependency('freerdp2', version: '>= 2.2.0', required: false)
 	if not dep_frdp.found()
-		error('RDP-backend requires freerdp2 or 3 which was not found. Or, you can use \'-Dbackend-rdp=false\'.')
+		error('RDP-backend requires freerdp >= 2.2.0 which was not found. Or, you can use \'-Dbackend-rdp=false\'.')
 	endif
 endif
 
 dep_frdp_server = dependency('freerdp-server3', version: '>= 3.0.0', required: false)
 if not dep_frdp_server.found()
-	dep_frdp_server = dependency('freerdp-server2', version: '>= 2.0.0', required: false)
+	dep_frdp_server = dependency('freerdp-server2', version: '>= 2.2.0', required: false)
 	if not dep_frdp_server.found()
-		error('RDP-backend requires freerdp-server2 or 3 which was not found. Or, you can use \'-Dbackend-rdp=false\'.')
+		error('RDP-backend requires freerdp-server >= 2.2.0 which was not found. Or, you can use \'-Dbackend-rdp=false\'.')
 	endif
 endif
 
 dep_wpr = dependency('winpr3', version: '>= 3.0.0', required: false)
 if not dep_wpr.found()
-	dep_wpr = dependency('winpr2', version: '>= 2.0.0', required: false)
+	dep_wpr = dependency('winpr2', version: '>= 2.2.0', required: false)
 	if not dep_wpr.found()
-		error('RDP-backend requires winpr2 or 3 which was not found. Or, you can use \'-Dbackend-rdp=false\'.')
+		error('RDP-backend requires winpr >= 2.2.0 which was not found. Or, you can use \'-Dbackend-rdp=false\'.')
 	endif
 endif
 
 dep_rdpapplist = dependency('rdpapplist', version: '>= 1.0.0', required: false)
 if dep_rdpapplist.found()
 	config_h.set('HAVE_FREERDP_RDPAPPLIST_H', '1')
-endif
-
-if cc.has_header('freerdp/version.h', dependencies: dep_frdp)
-	config_h.set('HAVE_FREERDP_VERSION_H', '1')
 endif
 
 if cc.has_header('freerdp/channels/gfxredir.h', dependencies: dep_frdp)

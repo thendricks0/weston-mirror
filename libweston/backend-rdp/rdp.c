@@ -911,20 +911,10 @@ rdp_peer_context_free(freerdp_peer* client, RdpPeerContext* context)
 	if (context->item.flags & RDP_PEER_ACTIVATED) {
 		weston_seat_release_keyboard(context->item.seat);
 		weston_seat_release_pointer(context->item.seat);
-		if (!client->settings->RemoteApplicationMode) {
-			weston_seat_release(context->item.seat);
-			free(context->item.seat);
-		} else {
-			/* Without understanding full details of above comments, but
-			   in RAIL mode, only one peer per backend can be activated,
-			   and no "deactivate_all" PDU to be used (since no client
-			   side desktop resize is allowed), so safe to free seat here
-			   to prevent possible memory leak. */
-			weston_seat_release(context->item.seat);
-			free(context->item.seat);
-			context->item.seat = NULL;
-			context->item.flags &= ~RDP_PEER_ACTIVATED;
-		}
+		weston_seat_release(context->item.seat);
+		free(context->item.seat);
+		context->item.seat = NULL;
+		context->item.flags &= ~RDP_PEER_ACTIVATED;
 	}
 
 	Stream_Free(context->encode_stream, TRUE);
@@ -2166,6 +2156,7 @@ rdp_backend_create(struct weston_compositor *compositor,
 	char *fd_str;
 	char *fd_tail;
 	int fd, ret;
+
 	struct rdp_output *output;
 	char *s;
 	int i;
@@ -2318,7 +2309,7 @@ rdp_backend_create(struct weston_compositor *compositor,
 		}
 
 		if (rdp_implant_listener(b, b->listener) < 0)
-			goto err_compositor;
+			goto err_listener;
 	} else {
 		/* get the socket from RDP_FD var */
 		fd_str = getenv("RDP_FD");
@@ -2346,15 +2337,9 @@ rdp_backend_create(struct weston_compositor *compositor,
 err_listener:
 	freerdp_listener_free(b->listener);
 err_output:
-	if (b->output_default) {
-		wl_list_for_each(output, &b->output_list, link) {
+	if (b->output_default)
+		wl_list_for_each(output, &b->output_list, link)
 			weston_output_release(&output->base);
-		}
-	}
-	if (b->head_default) {
-		rdp_head_destroy(compositor, b->head_default);
-		assert(b->head_default == NULL);
-	}
 err_compositor:
 	wl_list_for_each_safe(base, next, &compositor->head_list, compositor_link)
 		rdp_head_destroy(compositor, to_rdp_head(base));
