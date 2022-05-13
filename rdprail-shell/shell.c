@@ -2752,6 +2752,9 @@ shell_backend_request_window_move(struct weston_surface *surface, int x, int y, 
 	}
 
 	weston_view_set_position(view, x, y);
+
+	shell_rdp_debug(shsurf->shell, "%s: surface:%p is moved to (%d,%d) %dx%d\n",
+		__func__, surface, x, y, width, height);
 }
 
 static void
@@ -2804,6 +2807,10 @@ shell_backend_request_window_snap(struct weston_surface *surface, int x, int y, 
 
 		struct weston_size max_size = weston_desktop_surface_get_max_size(desktop_surface);
 		struct weston_size min_size = weston_desktop_surface_get_min_size(desktop_surface);
+		struct weston_geometry geometry = weston_desktop_surface_get_geometry(shsurf->desktop_surface);
+		/* weston_desktop_surface_set_size() expects the size in window geometry coordinates */
+		width -= (surface->width - geometry.width);
+		height -= (surface->height - geometry.height);
 
 		min_size.width = MAX(1, min_size.width);
 		min_size.height = MAX(1, min_size.height);
@@ -2826,8 +2833,11 @@ shell_backend_request_window_snap(struct weston_surface *surface, int x, int y, 
 
 	shsurf->snapped.x = x;
 	shsurf->snapped.y = y;
-	shsurf->snapped.width = width;
-	shsurf->snapped.height = height;
+	shsurf->snapped.width = width; // save width in window geometry coordinates.
+	shsurf->snapped.height = height; // save height in window geometry coordinates.
+
+	shell_rdp_debug(shsurf->shell, "%s: surface:%p is snapped at (%d,%d) %dx%d\n",
+		__func__, surface, x, y, width, height);
 }
 
 static void
