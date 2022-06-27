@@ -1,6 +1,8 @@
 srcs_weston = [
 	git_version_h,
 	'main.c',
+	'rdpaudio.c',
+	'rdpaudioin.c',
 	'text-backend.c',
 	'weston-screenshooter.c',
 	text_input_unstable_v1_server_protocol_h,
@@ -17,6 +19,8 @@ deps_weston = [
 	dep_libevdev,
 	dep_libdl,
 	dep_threads,
+	dep_frdp,
+	dep_frdp_server,
 ]
 
 if get_option('xwayland')
