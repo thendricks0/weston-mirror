@@ -2308,9 +2308,8 @@ rdp_backend_create(struct weston_compositor *compositor,
 err_listener:
 	freerdp_listener_free(b->listener);
 err_output:
-	if (b->output_default)
-		wl_list_for_each(output, &b->output_list, link)
-			weston_output_release(&output->base);
+	wl_list_for_each(output, &b->output_list, link)
+		weston_output_release(&output->base);
 err_compositor:
 	wl_list_for_each_safe(base, next, &compositor->head_list, compositor_link)
 		rdp_head_destroy(compositor, to_rdp_head(base));
