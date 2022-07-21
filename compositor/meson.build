@@ -3,6 +3,7 @@ srcs_weston = [
 	'main.c',
 	'rdpaudio.c',
 	'rdpaudioin.c',
+	'rdpdisp.c',
 	'text-backend.c',
 	'weston-screenshooter.c',
 	text_input_unstable_v1_server_protocol_h,
