@@ -3771,7 +3771,8 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
 	if (argc > 1)
 		goto out;
 
-	weston_compositor_wake(wet.compositor);
+	/* Until RDP connection is established, keep compositor sleep state */
+	weston_compositor_sleep(wet.compositor);
 
 	if (execute_autolaunch(&wet, config) < 0)
 		goto out;
