@@ -661,6 +661,9 @@ rdp_destroy(struct weston_compositor *ec)
 		b->debug = NULL;
 	}
 
+	if (b->persistent_rail_seat)
+		weston_seat_release(b->persistent_rail_seat);
+
 	weston_compositor_shutdown(ec);
 
 	wl_list_for_each_safe(base, next, &ec->head_list, compositor_link)
@@ -668,6 +671,7 @@ rdp_destroy(struct weston_compositor *ec)
 
 	freerdp_listener_free(b->listener);
 
+	free(b->persistent_rail_seat);
 	free(b->server_cert);
 	free(b->server_key);
 	free(b->rdp_key);
@@ -756,12 +760,14 @@ static void
 rdp_peer_context_free(freerdp_peer* client, RdpPeerContext* context)
 {
 	struct rdp_backend *b;
+	rdpSettings *settings;
 	unsigned i;
 
 	if (!context)
 		return;
 
 	b = context->rdpBackend;
+	settings = client->context->settings;
 
 	/* While RDP client is disconnected, keep compositor sleep state */
 	weston_compositor_sleep(b->compositor);
@@ -797,8 +803,15 @@ rdp_peer_context_free(freerdp_peer* client, RdpPeerContext* context)
 	if (context->item.flags & RDP_PEER_ACTIVATED) {
 		weston_seat_release_keyboard(context->item.seat);
 		weston_seat_release_pointer(context->item.seat);
-		weston_seat_release(context->item.seat);
-		free(context->item.seat);
+		/* save current seat for future use only when it's not saved yet */
+		if (settings->RemoteApplicationMode &&
+			b->enable_persistent_rail_seat) {
+			assert(!b->persistent_rail_seat);
+			b->persistent_rail_seat = context->item.seat;
+		} else {
+			weston_seat_release(context->item.seat);
+			free(context->item.seat);
+		}
 		context->item.seat = NULL;
 		context->item.flags &= ~RDP_PEER_ACTIVATED;
 	}
@@ -1185,19 +1198,28 @@ xf_peer_activate(freerdp_peer* client)
 						   &xkbRuleNames, 0);
 	}
 
+	if (settings->RemoteApplicationMode)
+		snprintf(seat_name, sizeof(seat_name), "RDP Remote Application Client");
 	if (settings->ClientHostname)
 		snprintf(seat_name, sizeof(seat_name), "RDP %s", settings->ClientHostname);
 	else
 		snprintf(seat_name, sizeof(seat_name), "RDP peer @%s", settings->ClientAddress);
 
-	peersItem->seat = zalloc(sizeof(*peersItem->seat));
-	if (!peersItem->seat) {
-		xkb_keymap_unref(keymap);
-		rdp_debug_error(b, "unable to create a weston_seat\n");
-		goto error_exit;
+	if (settings->RemoteApplicationMode &&
+		b->persistent_rail_seat) {
+		/* reuse persistent seat for RAIL connection */
+		peersItem->seat = b->persistent_rail_seat;
+		b->persistent_rail_seat = NULL;
+	} else {
+		peersItem->seat = zalloc(sizeof(*peersItem->seat));
+		if (!peersItem->seat) {
+			xkb_keymap_unref(keymap);
+			rdp_debug_error(b, "unable to create a weston_seat\n");
+			goto error_exit;
+		}
+		weston_seat_init(peersItem->seat, b->compositor, seat_name);
 	}
 
-	weston_seat_init(peersItem->seat, b->compositor, seat_name);
 	weston_seat_init_keyboard(peersItem->seat, keymap);
 	xkb_keymap_unref(keymap);
 	weston_seat_init_pointer(peersItem->seat);
@@ -2109,6 +2131,7 @@ rdp_backend_create(struct weston_compositor *compositor,
 	b->no_clients_resize = config->no_clients_resize;
 	b->force_no_compression = config->force_no_compression;
 	b->redirect_clipboard = config->redirect_clipboard;
+	b->enable_persistent_rail_seat = config->enable_persistent_rail_seat;
 	b->rdp_monitor_refresh_rate = config->rdp_monitor_refresh_rate * 1000;
 	b->audio_in_setup = config->audio_in_setup;
 	b->audio_in_teardown = config->audio_in_teardown;
@@ -2296,6 +2319,7 @@ config_init_to_defaults(struct weston_rdp_backend_config *config)
 	config->no_clients_resize = 0;
 	config->force_no_compression = 0;
 	config->redirect_clipboard = false;
+	config->enable_persistent_rail_seat = false;
 	config->rdp_monitor_refresh_rate = WESTON_RDP_MODE_FREQ;
 	config->rail_config.use_rdpapplist = false;
 	config->rail_config.use_shared_memory = false;
